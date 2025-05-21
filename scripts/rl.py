@@ -1,6 +1,23 @@
+"""
+# 强化学习训练脚本 (Reinforcement Learning Training Script)
+#
+# 本文件是使用PPO算法训练因子生成模型的主执行脚本。主要功能包括：
+#
+# 1. 配置和初始化训练环境
+# 2. 构建因子池和强化学习模型
+# 3. 训练过程管理和模型保存
+# 4. 因子评估和测试
+#
+# 与其他组件的关系：
+# - 使用alphagen/rl/policy.py中的PPO策略
+# - 使用alphagen/rl/env中的强化学习环境
+# - 使用alphagen/models中的因子池存储生成的因子
+# - 使用alphagen/data中的表达式和计算器
+# - 训练结果保存在./out/results目录
+"""
 import json
 import os
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Union
 from datetime import datetime
 from pathlib import Path
 from openai import OpenAI
@@ -17,8 +34,8 @@ from alphagen.rl.env.wrapper import AlphaEnv
 from alphagen.rl.policy import LSTMSharedNet
 from alphagen.utils import reseed_everything, get_logger
 from alphagen.rl.env.core import AlphaEnvCore
-from alphagen_qlib.calculator import QLibStockDataCalculator
-from alphagen_qlib.stock_data import initialize_qlib
+from alphagen_qlib.qlib_alpha_calculator import QLibGoldDataCalculator
+from alphagen_qlib.gold_data import GoldData, initialize_qlib, FeatureType
 from alphagen_llm.client import ChatClient, OpenAIClient, ChatConfig
 from alphagen_llm.prompts.system_prompt import EXPLAIN_WITH_TEXT_DESC
 from alphagen_llm.prompts.interaction import InterativeSession, DefaultInteraction
@@ -63,7 +80,7 @@ class CustomCallback(BaseCallback):
     def __init__(
         self,
         save_path: str,
-        test_calculators: List[QLibStockDataCalculator],
+        test_calculators: List[QLibGoldDataCalculator],
         verbose: int = 0,
         chat_session: Optional[InterativeSession] = None,
         llm_every_n_steps: int = 25_000,
@@ -157,7 +174,7 @@ class CustomCallback(BaseCallback):
 
 def run_single_experiment(
     seed: int = 0,
-    instruments: str = "csi300",
+    data_path: str = "data/au888.csv",  # 黄金数据路径
     pool_capacity: int = 10,
     steps: int = 200_000,
     alphagpt_init: bool = False,
@@ -167,12 +184,14 @@ def run_single_experiment(
     llm_replace_n: int = 3
 ):
     reseed_everything(seed)
-    initialize_qlib("~/.qlib/qlib_data/cn_data")
+    
+    # 黄金数据不需要初始化qlib
+    # initialize_qlib("~/.qlib/qlib_data/cn_data")
 
     llm_replace_n = 0 if not use_llm else llm_replace_n
     print(f"""[Main] Starting training process
     Seed: {seed}
-    Instruments: {instruments}
+    Data Path: {data_path}
     Pool capacity: {pool_capacity}
     Total Iteration Steps: {steps}
     AlphaGPT-Like Init-Only LLM Usage: {alphagpt_init}
@@ -182,35 +201,46 @@ def run_single_experiment(
     Drop N alphas before LLM: {drop_rl_n}""")
 
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    # tag = "rlv2" if llm_add_subexpr == 0 else f"afs{llm_add_subexpr}aar1-5"
     tag = (
         "agpt" if alphagpt_init else
         "rl" if not use_llm else
         f"llm_d{drop_rl_n}")
-    name_prefix = f"{instruments}_{pool_capacity}_{seed}_{timestamp}_{tag}"
+    name_prefix = f"gold_{pool_capacity}_{seed}_{timestamp}_{tag}"
     save_path = os.path.join("./out/results", name_prefix)
     os.makedirs(save_path, exist_ok=True)
 
-    device = torch.device("cuda:0")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    
+    # 定义黄金数据的特征
+    features = [
+        FeatureType.OPEN, 
+        FeatureType.CLOSE, 
+        FeatureType.HIGH, 
+        FeatureType.LOW, 
+        FeatureType.VOLUME
+    ]
+    
+    # 定义目标表达式 - 使用20天后的价格变化作为目标
     close = Feature(FeatureType.CLOSE)
     target = Ref(close, -20) / close - 1
 
-    def get_dataset(start: str, end: str) -> StockData:
-        return StockData(
-            instrument=instruments,
+    def get_dataset(start: str, end: str) -> GoldData:
+        return GoldData(
             start_time=start,
             end_time=end,
+            data_path=data_path,
+            features=features,
             device=device
         )
 
     segments = [
-        ("2012-01-01", "2021-12-31"),
-        ("2022-01-01", "2022-06-30"),
-        ("2022-07-01", "2022-12-31"),
-        ("2023-01-01", "2023-06-30")
+        ("2012-01-01", "2021-12-31"),  # 训练集
+        ("2022-01-01", "2022-06-30"),  # 测试集1
+        ("2022-07-01", "2022-12-31"),  # 测试集2
+        ("2023-01-01", "2023-06-30")   # 测试集3
     ]
     datasets = [get_dataset(*s) for s in segments]
-    calculators = [QLibStockDataCalculator(d, target) for d in datasets]
+    calculators = [QLibGoldDataCalculator(d, target) for d in datasets]
 
     def build_pool(exprs: List[Expression]) -> LinearAlphaPool:
         pool = MseAlphaPool(
@@ -231,88 +261,59 @@ def run_single_experiment(
         chat = build_chat_client(save_path)
         inter = DefaultInteraction(
             build_parser(), chat, build_pool,
-            calculator_train=calculators[0], calculators_test=calculators[1:],
-            replace_k=llm_replace_n, forgetful=True
+            get_logger('interaction', os.path.join(save_path, "interact.log"))
         )
-        pool = inter.run()
+        inter.update_pool(pool)
 
-    env = AlphaEnv(
-        pool=pool,
-        device=device,
-        print_expr=True
-    )
-    checkpoint_callback = CustomCallback(
-        save_path=save_path,
-        test_calculators=calculators[1:],
+    cb = CustomCallback(
+        save_path, calculators[1:],
         verbose=1,
         chat_session=inter,
         llm_every_n_steps=llm_every_n_steps,
         drop_rl_n=drop_rl_n
     )
-    model = MaskablePPO(
-        "MlpPolicy",
-        env,
-        policy_kwargs=dict(
+
+    env = AlphaEnv(
+        pool=pool,
+        max_steps=20,
             features_extractor_class=LSTMSharedNet,
             features_extractor_kwargs=dict(
-                n_layers=2,
-                d_model=128,
-                dropout=0.1,
-                device=device,
-            ),
+            n_layers=2, d_model=128,
+            dropout=0.2, device=device
         ),
-        gamma=1.,
-        ent_coef=0.01,
-        batch_size=128,
-        tensorboard_log="./out/tensorboard",
-        device=device,
-        verbose=1,
+        device=device
     )
-    model.learn(
-        total_timesteps=steps,
-        callback=checkpoint_callback,
-        tb_log_name=name_prefix,
-    )
+    model = MaskablePPO('MlpPolicy', env, verbose=1, device=device)
+    model.learn(total_timesteps=steps, callback=cb)
+
+    path = os.path.join(save_path, 'final_model')
+    model.save(path)
+    cb.show_pool_state()
+    return cb
 
 
 def main(
     random_seeds: Union[int, Tuple[int]] = 0,
     pool_capacity: int = 20,
-    instruments: str = "csi300",
+    data_path: str = "data/au888.csv",  # 黄金数据路径
     alphagpt_init: bool = False,
     use_llm: bool = False,
     drop_rl_n: int = 10,
     steps: Optional[int] = None,
     llm_every_n_steps: int = 25000
 ):
-    """
-    :param random_seeds: Random seeds
-    :param pool_capacity: Maximum size of the alpha pool
-    :param instruments: Stock subset name
-    :param alphagpt_init: Use an alpha set pre-generated by LLM as the initial pool
-    :param use_llm: Enable LLM usage
-    :param drop_rl_n: Drop n worst alphas before invoke the LLM
-    :param steps: Total iteration steps
-    :param llm_every_n_steps: Invoke LLM every n steps
-    """
     if isinstance(random_seeds, int):
-        random_seeds = (random_seeds, )
-    default_steps = {
-        10: 200_000,
-        20: 250_000,
-        50: 300_000,
-        100: 350_000
-    }
-    for s in random_seeds:
+        random_seeds = (random_seeds,)
+    for seed in random_seeds:
         run_single_experiment(
-            seed=s,
-            instruments=instruments,
+            seed=seed,
+            data_path=data_path,  # 传递黄金数据路径
             pool_capacity=pool_capacity,
-            steps=default_steps[int(pool_capacity)] if steps is None else int(steps),
+            steps=steps or 200_000,
             alphagpt_init=alphagpt_init,
-            drop_rl_n=drop_rl_n,
             use_llm=use_llm,
-            llm_every_n_steps=llm_every_n_steps
+            llm_every_n_steps=llm_every_n_steps,
+            drop_rl_n=drop_rl_n,
         )
 
 

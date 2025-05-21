@@ -1,3 +1,24 @@
+"""
+# 表达式树构建模块 (Expression Tree Builder Module)
+#
+# 本文件实现了表达式树的构建和验证功能。主要内容包括：
+#
+# 1. ExpressionBuilder：表达式树构建器
+#    - 使用栈结构构建复杂的表达式树
+#    - 根据令牌类型添加相应节点
+#    - 验证构建过程中的语法正确性
+#
+# 提供多种验证方法：
+# - 检查操作符参数是否合法
+# - 验证时间间隔参数
+# - 确保表达式的特征依赖正确
+#
+# 与其他组件的关系：
+# - 使用alphagen/data/tokens.py中的令牌表示输入
+# - 使用alphagen/data/expression.py中的类构建表达式树
+# - 被alphagen/data/parser.py间接使用，支持表达式解析
+# - 为alphagen/rl中的策略提供表达式构建支持
+"""
 from typing import List
 from alphagen.data.exception import InvalidExpressionException
 from alphagen.data.expression import BinaryOperator, Constant, DeltaTime, Expression, Feature, PairRollingOperator, RollingOperator, UnaryOperator

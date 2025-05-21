@@ -1,165 +1,292 @@
-from typing import Optional, List
-from logging import Logger
-from datetime import datetime
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+# LLM因子生成脚本 (LLM Factor Generation Script)
+#
+# 本脚本实现了纯基于LLM交互式生成量化因子的流程。主要功能包括：
+#
+# 1. 初始化市场数据环境
+# 2. 设置LLM客户端
+# 3. 通过多轮对话生成因子
+# 4. 评估生成的因子表现
+# 5. 保存结果到因子池
+#
+# 使用方法：
+# python -m scripts.llm_only --help
+"""
+import sys
+import os
 import json
-from itertools import accumulate
+import logging
+import argparse
+from datetime import datetime
+from typing import List, Dict, Optional, Any
 
-import fire
 import torch
-from openai import OpenAI
+import numpy as np
 
+from alphagen.utils import get_logger
 from alphagen.data.expression import Expression
 from alphagen.data.parser import ExpressionParser
-from alphagen.data.expression import *
-from alphagen.models.linear_alpha_pool import MseAlphaPool
-from alphagen_qlib.calculator import QLibStockDataCalculator
-from alphagen_qlib.stock_data import StockData, initialize_qlib
-from alphagen_generic.features import target
-from alphagen_llm.client import OpenAIClient, ChatConfig
-from alphagen_llm.prompts.interaction import DefaultInteraction, DefaultReport
-from alphagen_llm.prompts.system_prompt import EXPLAIN_WITH_TEXT_DESC
-from alphagen.utils import get_logger
-from alphagen.utils.misc import pprint_arguments
+from alphagen.models.linear_alpha_pool import LinearAlphaPool
+from alphagen_qlib.gold_data import GoldData, initialize_qlib
+from alphagen_qlib.qlib_alpha_calculator import QLibGoldDataCalculator
+from alphagen_llm.client import ChatClient, OpenAIClient, ChatConfig
+from alphagen_llm.generator import LLMAlphaGenerator
+from alphagen_llm.prompts.system_prompt import ALPHA_GENERATOR_PROMPT, EXPLAIN_WITH_TEXT_DESC
 
 
-def build_chat(system_prompt: str, logger: Optional[Logger] = None):
-    return OpenAIClient(
-        OpenAI(base_url="https://api.ai.cs.ac.cn/v1"),
-        ChatConfig(
-            system_prompt=system_prompt,
-            logger=logger
-        )
-    )
+def parse_args():
+    parser = argparse.ArgumentParser(description="LLM-based alpha factor generation")
+    
+    # 数据配置
+    parser.add_argument("--qlib_data", type=str, default="~/.qlib/qlib_data/cn_data_2024h1",
+                        help="Path to qlib data directory")
+    parser.add_argument("--instruments", type=str, default="csi300",
+                        help="Instruments to use")
+    parser.add_argument("--train_start", type=str, default="2012-01-01",
+                        help="Training data start date")
+    parser.add_argument("--train_end", type=str, default="2021-12-31",
+                        help="Training data end date")
+    parser.add_argument("--test_start", type=str, default="2022-01-01",
+                        help="Test data start date")
+    parser.add_argument("--test_end", type=str, default="2023-06-30",
+                        help="Test data end date")
+                        
+    # LLM配置
+    parser.add_argument("--model", type=str, default="gpt-4",
+                        help="LLM model name")
+    parser.add_argument("--temperature", type=float, default=0.7,
+                        help="LLM temperature")
+    parser.add_argument("--api_key", type=str, default=None,
+                        help="OpenAI API key (default: use environment variable)")
+    parser.add_argument("--api_base", type=str, default=None,
+                        help="OpenAI API base URL (default: use environment variable)")
+                        
+    # 生成配置
+    parser.add_argument("--n_factors", type=int, default=10,
+                        help="Number of factors to generate")
+    parser.add_argument("--iterations", type=int, default=3,
+                        help="Number of improvement iterations per factor")
+    parser.add_argument("--market_context", type=str, default=None,
+                        help="Path to market context file")
+    parser.add_argument("--pool_capacity", type=int, default=20,
+                        help="Alpha pool capacity")
+    parser.add_argument("--ic_lower_bound", type=float, default=None,
+                        help="Minimum IC for factors")
+    
+    # 输出配置
+    parser.add_argument("--save_path", type=str, default="outputs/llm",
+                        help="Path to save results")
+    parser.add_argument("--log_level", type=str, default="INFO",
+                        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+                        help="Logging level")
+    parser.add_argument("--seed", type=int, default=42,
+                        help="Random seed")
+    
+    return parser.parse_args()
 
 
-def build_parser(use_additional_mapping: bool = False) -> ExpressionParser:
-    mapping = {
-        "Max": [Greater],
-        "Min": [Less],
-        "Delta": [Sub]
-    }
-    return ExpressionParser(
-        Operators,
-        ignore_case=True,
-        additional_operator_mapping=mapping if use_additional_mapping else None,
-        non_positive_time_deltas_allowed=False
-    )
+def setup_logger(args):
+    os.makedirs(args.save_path, exist_ok=True)
+    log_file = os.path.join(args.save_path, f"llm_generation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+    logger = get_logger("llm_generation", log_file)
+    logger.setLevel(getattr(logging, args.log_level))
+    return logger
 
 
-def build_test_data(instruments: str, device: torch.device, n_half_years: int) -> List[Tuple[str, StockData]]:
-    halves = (("01-01", "06-30"), ("07-01", "12-31"))
-
-    def get_dataset(i: int) -> Tuple[str, StockData]:
-        year = 2022 + i // 2
-        start, end = halves[i % 2]
-        return (
-            f"{year}h{i % 2 + 1}",
-            StockData(
-                instrument=instruments,
-                start_time=f"{year}-{start}",
-                end_time=f"{year}-{end}",
-                device=device
-            )
-        )
-
-    return [get_dataset(i) for i in range(n_half_years)]
+def load_market_context(context_path: Optional[str]) -> str:
+    """加载市场背景信息，用于提供给LLM"""
+    if not context_path:
+        return "生成适用于黄金期货市场的alpha因子，考虑黄金的避险属性、与宏观经济的关系以及周期性波动特点。"
+        
+    with open(context_path, 'r', encoding='utf-8') as f:
+        return f.read()
 
 
-def run_experiment(
-    pool_size: int = 20,
-    n_replace: int = 3,
-    n_updates: int = 20,
-    without_weights: bool = False,
-    contextful: bool = False,
-    prefix: Optional[str] = None,
-    force_remove: bool = False,
-    also_report_history: bool = False
-):
-    """
-    :param pool_size: Maximum alpha pool size
-    :param n_replace: Replace n alphas on each iteration
-    :param n_updates: Run n iterations
-    :param without_weights: Do not report the weights of the alphas to the LLM
-    :param contextful: Keep context in the conversation
-    :param prefix: Output location prefix
-    :param force_remove: Force remove worst old alphas
-    :param also_report_history: Also report alpha pool update history to the LLM
-    """
-
-    args = pprint_arguments()
-
-    initialize_qlib(f"~/.qlib/qlib_data/cn_data")
-    instruments = "csi300"
-    device = torch.device("cuda:0")
-    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    prefix = str(prefix) + "-" if prefix is not None else ""
-    out_path = f"./out/llm-tests/interaction/{prefix}{timestamp}"
-    logger = get_logger(name="llm", file_path=f"{out_path}/llm.log")
-
-    with open(f"{out_path}/config.json", "w") as f:
-        json.dump(args, f)
-
-    data_train = StockData(
-        instrument=instruments,
-        start_time="2012-01-01",
-        end_time="2021-12-31",
+def main():
+    args = parse_args()
+    logger = setup_logger(args)
+    
+    # 设置随机种子
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    
+    logger.info("Initializing data environment...")
+    
+    # 初始化qlib数据
+    initialize_qlib(args.qlib_data)
+    
+    # 准备设备
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logger.info(f"Using device: {device}")
+    
+    # 加载数据
+    data_train = GoldData(
+        args.instruments, 
+        args.train_start, 
+        args.train_end, 
         device=device
     )
-    data_test = build_test_data(instruments, device, n_half_years=3)
-    calculator_train = QLibStockDataCalculator(data_train, target)
-    calculator_test = [QLibStockDataCalculator(d, target) for _, d in data_test]
-
-    def make_pool(exprs: List[Expression]) -> MseAlphaPool:
-        pool = MseAlphaPool(
-            capacity=max(pool_size, len(exprs)),
-            calculator=calculator_train,
-            device=device
-        )
-        pool.force_load_exprs(exprs)
-        return pool
-
-    def show_iteration(_, iter: int):
-        print(f"Iteration {iter} finished...")
-
-    inter = DefaultInteraction(
-        parser=build_parser(),
-        client=build_chat(EXPLAIN_WITH_TEXT_DESC, logger=logger),
-        pool_factory=make_pool,
-        calculator_train=calculator_train,
-        calculators_test=calculator_test,
-        replace_k=n_replace,
-        force_remove=force_remove,
-        forgetful=not contextful,
-        no_actual_weights=without_weights,
-        also_report_history=also_report_history,
-        on_pool_update=show_iteration
+    data_test = GoldData(
+        args.instruments, 
+        args.test_start, 
+        args.test_end, 
+        device=device
     )
-    inter.run(n_updates=n_updates)
-
-    with open(f"{out_path}/report.json", "w") as f:
-        json.dump([r.to_dict() for r in inter.reports], f)
-
-    cum_days = list(accumulate(d.n_days for _, d in data_test))
-    mean_ic_results = {}
-    mean_ics, mean_rics = [], []
-
-    def get_rolling_means(ics: List[float]) -> List[float]:
-        cum_ics = accumulate(ic * tup[1].n_days for ic, tup in zip(ics, data_test))
-        return [s / n for s, n in zip(cum_ics, cum_days)]
-
-    for report in inter.reports:
-        mean_ics.append(get_rolling_means(report.test_ics))
-        mean_rics.append(get_rolling_means(report.test_rics))
-
-    for i, (name, _) in enumerate(data_test):
-        mean_ic_results[name] = {
-            "ics": [step[i] for step in mean_ics],
-            "rics": [step[i] for step in mean_rics]
-        }
     
-    with open(f"{out_path}/rolling_mean_ic.json", "w") as f:
-        json.dump(mean_ic_results, f)
+    # 创建计算器和因子池
+    calculator_train = QLibGoldDataCalculator(data_train, target="20d")
+    calculator_test = QLibGoldDataCalculator(data_test, target="20d")
+    
+    pool = LinearAlphaPool(
+        capacity=args.pool_capacity,
+        calculator=calculator_train,
+        ic_lower_bound=args.ic_lower_bound,
+        device=device
+    )
+    
+    # 设置LLM客户端
+    logger.info(f"Setting up LLM client with model: {args.model}")
+    config = ChatConfig(
+        model=args.model,
+        temperature=args.temperature,
+        api_key=args.api_key,
+        api_base=args.api_base
+    )
+    client = OpenAIClient(config)
+    
+    # 创建表达式解析器
+    parser = ExpressionParser()
+    
+    # 创建LLM因子生成器
+    generator = LLMAlphaGenerator(
+        client=client,
+        pool=pool,
+        parser=parser,
+        system_prompt=ALPHA_GENERATOR_PROMPT
+    )
+    
+    # 加载市场背景信息
+    market_context = load_market_context(args.market_context)
+    
+    # 生成因子
+    logger.info(f"Starting factor generation, aiming for {args.n_factors} factors...")
+    
+    generated_factors = []
+    initial_prompt = f"""
+请设计用于量化交易的黄金市场alpha因子。
+
+市场背景:
+{market_context}
+
+请生成3个不同的alpha因子，每个因子需要:
+1. 清晰的数学表达式
+2. 背后的金融/市场逻辑
+3. 预期的表现特点
+
+可用的特征包括:
+- open: 开盘价
+- high: 最高价
+- low: 最低价
+- close: 收盘价
+- volume: 成交量
+- oi: 未平仓合约数量
+"""
+    
+    # 初始生成
+    factors = generator.generate_factors(
+        prompt=initial_prompt,
+        n_attempts=max(2, (args.n_factors + 2) // 3)
+    )
+    
+    # 评估和改进
+    factors = generator.evaluate_factors(factors)
+    valid_factors = [f for f in factors if f.valid]
+    
+    logger.info(f"Initial generation produced {len(valid_factors)} valid factors out of {len(factors)}")
+    
+    # 迭代改进
+    if valid_factors:
+        improved_factors = generator.iterative_improvement(
+            valid_factors, 
+            n_iterations=args.iterations
+        )
+        generated_factors.extend(improved_factors)
+    
+    # 如果因子数量不够，尝试更多的生成
+    while len(generated_factors) < args.n_factors:
+        remaining = args.n_factors - len(generated_factors)
+        logger.info(f"Need {remaining} more factors. Generating...")
+        
+        feedback_prompt = f"""
+前面生成的因子不够或表现不佳。请生成更多不同的黄金市场alpha因子，注意:
+1. 避免过于复杂的表达式
+2. 考虑黄金特有的市场异象和交易信号（如避险需求、与美元和实际利率的关系）
+3. 利用不同的时间窗口捕捉黄金的周期性和波动特性
+4. 确保表达式语法正确
+"""
+        new_factors = generator.generate_factors(
+            prompt=feedback_prompt,
+            n_attempts=max(1, (remaining + 1) // 2)
+        )
+        
+        new_factors = generator.evaluate_factors(new_factors)
+        valid_new_factors = [f for f in new_factors if f.valid]
+        
+        if valid_new_factors:
+            improved_new_factors = generator.iterative_improvement(
+                valid_new_factors, 
+                n_iterations=args.iterations
+            )
+            generated_factors.extend(improved_new_factors)
+        
+        # 防止无限循环
+        if not valid_new_factors:
+            logger.warning("Failed to generate more valid factors, breaking loop")
+            break
+    
+    # 保存结果
+    result_dir = os.path.join(args.save_path, f"generation_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+    os.makedirs(result_dir, exist_ok=True)
+    
+    # 保存因子池
+    pool_file = os.path.join(result_dir, "alpha_pool.json")
+    with open(pool_file, 'w', encoding='utf-8') as f:
+        json.dump(pool.to_json_dict(), f, indent=2, ensure_ascii=False)
+    
+    # 保存生成的因子详情
+    factors_file = os.path.join(result_dir, "generated_factors.json")
+    factors_json = []
+    for i, factor in enumerate(generated_factors):
+        factor_data = {
+            "id": i,
+            "expression": factor.expression_text,
+            "description": factor.description,
+            "metrics": factor.metrics
+        }
+        factors_json.append(factor_data)
+    
+    with open(factors_file, 'w', encoding='utf-8') as f:
+        json.dump(factors_json, f, indent=2, ensure_ascii=False)
+    
+    # 测试表现
+    logger.info("Testing performance on test dataset...")
+    ic_test, ric_test = pool.test_ensemble(calculator_test)
+    
+    test_results = {
+        "ic_test": float(ic_test),
+        "ric_test": float(ric_test),
+        "n_factors": len(generated_factors)
+    }
+    
+    test_file = os.path.join(result_dir, "test_results.json")
+    with open(test_file, 'w', encoding='utf-8') as f:
+        json.dump(test_results, f, indent=2)
+    
+    logger.info(f"Generation complete. Results saved to {result_dir}")
+    logger.info(f"Test IC: {ic_test:.4f}, Test Rank IC: {ric_test:.4f}")
 
 
 if __name__ == "__main__":
-    fire.Fire(run_experiment)
+    main() 

@@ -1,3 +1,26 @@
+"""
+# 相关性计算工具模块 (Correlation Utilities Module)
+#
+# 本文件实现了批量计算相关系数的高效函数。主要内容包括：
+#
+# 1. batch_pearsonr：批量计算皮尔逊相关系数
+#    - 支持张量形式的数据
+#    - 处理NaN值和批量计算
+#
+# 2. batch_spearmanr：批量计算斯皮尔曼等级相关系数
+#    - 实现等级数据转换
+#    - 高效批量处理
+#
+# 3. 辅助函数：
+#    - 掩码处理
+#    - 等级数据转换
+#    - 均值和标准差计算
+#
+# 与其他组件的关系：
+# - 被alphagen/data/calculator.py使用，计算因子之间的相关性
+# - 为alphagen/models中的因子池提供相关性度量
+# - 支持alphagen/rl中的奖励计算
+"""
 import torch
 from torch import Tensor
 

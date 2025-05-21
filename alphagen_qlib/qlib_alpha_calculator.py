@@ -1,13 +1,13 @@
 from typing import Optional
 from torch import Tensor
-from alphagen.data.calculator import TensorAlphaCalculator
+from alphagen.data.alpha_calculator_base import TensorAlphaCalculator
 from alphagen.data.expression import Expression
 from alphagen.utils.pytorch_utils import normalize_by_day
-from alphagen_qlib.stock_data import StockData
+from alphagen_qlib.gold_data import GoldData
 
 
-class QLibStockDataCalculator(TensorAlphaCalculator):
-    def __init__(self, data: StockData, target: Optional[Expression] = None):
+class QLibGoldDataCalculator(TensorAlphaCalculator):
+    def __init__(self, data: GoldData, target: Optional[Expression] = None):
         super().__init__(normalize_by_day(target.evaluate(data)) if target is not None else None)
         self.data = data
 
@@ -16,4 +16,4 @@ class QLibStockDataCalculator(TensorAlphaCalculator):
     
     @property
     def n_days(self) -> int:
-        return self.data.n_days
+        return self.data.n_days 

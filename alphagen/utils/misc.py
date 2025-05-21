@@ -1,3 +1,21 @@
+"""
+# 杂项工具模块 (Miscellaneous Utilities Module)
+#
+# 本文件提供了各种通用辅助函数。主要内容包括：
+#
+# 1. 列表和索引工具：
+#    - reverse_enumerate：反向枚举列表元素
+#    - find_last_if：查找满足条件的最后一个元素
+#
+# 2. 函数参数处理：
+#    - get_arguments_as_dict：获取函数参数字典
+#    - pprint_arguments：格式化打印函数参数
+#
+# 与其他组件的关系：
+# - 被alphagen/data/parser.py使用，支持表达式解析
+# - 为整个项目提供通用工具函数
+# - 简化调试和参数处理
+"""
 from typing import TypeVar, List, Iterable, Tuple, Callable, Optional
 from types import FrameType
 import inspect

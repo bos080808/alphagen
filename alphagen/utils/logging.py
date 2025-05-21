@@ -1,3 +1,22 @@
+"""
+# 日志工具模块 (Logging Utilities Module)
+#
+# 本文件提供了日志记录和配置的功能。主要内容包括：
+#
+# 1. get_logger：创建和配置日志记录器
+#    - 支持同时输出到文件和控制台
+#    - 自动创建日志目录
+#    - 配置格式化输出
+#
+# 2. get_null_logger：创建空日志记录器
+#    - 用于禁用日志输出
+#    - 避免日志传播
+#
+# 与其他组件的关系：
+# - 被scripts中的训练脚本使用，记录训练进程
+# - 为alphagen/models中的模型提供日志支持
+# - 记录系统运行状态和错误信息
+"""
 import logging
 import os
 from typing import Optional

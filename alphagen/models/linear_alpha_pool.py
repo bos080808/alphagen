@@ -1,3 +1,25 @@
+"""
+# 线性因子池模块 (Linear Alpha Pool Module)
+#
+# 本文件实现了线性因子池，用于组合和优化多个量化投资因子。主要内容包括：
+#
+# 1. LinearAlphaPool：线性因子池基类
+#    - 管理多个因子及其权重
+#    - 计算因子间相关性
+#    - 添加、移除和评估因子
+#
+# 2. MseAlphaPool：基于均方误差的因子池
+#    - 使用最小二乘法优化因子权重
+#
+# 3. MeanStdAlphaPool：基于均值-标准差的因子池
+#    - 结合收益和风险优化因子权重
+#
+# 与其他组件的关系：
+# - 继承alphagen/models/alpha_pool.py中的基类
+# - 使用alphagen/data/calculator.py评估因子
+# - 存储由alphagen/rl/policy.py生成的因子表达式
+# - 实现因子的组合优化和权重管理
+"""
 import math
 from itertools import count
 from typing import List, Optional, Tuple, Iterable, Dict, Any, Set
@@ -7,7 +29,7 @@ import numpy as np
 import torch
 
 from .alpha_pool import AlphaPoolBase
-from ..data.calculator import AlphaCalculator, TensorAlphaCalculator
+from ..data.alpha_calculator_base import AlphaCalculator, TensorAlphaCalculator
 from ..data.expression import Expression, OutOfDataRangeError
 from ..data.pool_update import PoolUpdate, AddRemoveAlphas
 from ..utils.correlation import batch_pearsonr

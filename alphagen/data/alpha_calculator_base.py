@@ -1,3 +1,22 @@
+"""
+# 因子计算器模块 (Alpha Calculator Module)
+#
+# 本文件定义了用于计算和评估量化投资因子的计算器类。主要内容包括：
+#
+# 1. AlphaCalculator：因子计算器基类
+#    - 定义了计算IC（信息系数）、排名IC等核心方法接口
+#    - 支持单个因子和因子组合的评估
+#
+# 2. TensorAlphaCalculator：基于PyTorch的因子计算器实现
+#    - 使用张量进行高效计算
+#    - 支持批量计算和GPU加速
+#
+# 与其他组件的关系：
+# - 使用alphagen/data/expression.py中的表达式表示因子
+# - 被alphagen/models中的因子池使用，评估因子和因子组合
+# - 为alphagen/rl中的强化学习环境提供奖励计算支持
+# - 使用alphagen/utils/correlation.py中的相关性计算函数
+"""
 from abc import ABCMeta, abstractmethod
 from typing import Tuple, Optional, Sequence
 from torch import Tensor
@@ -123,4 +142,4 @@ class TensorAlphaCalculator(AlphaCalculator):
             rics = batch_spearmanr(value, target)
             ic_mean, ic_std = ics.mean().item(), ics.std().item()
             ric_mean, ric_std = rics.mean().item(), rics.std().item()
-            return ic_mean, ic_mean / ic_std, ric_mean, ric_mean / ric_std
+            return ic_mean, ic_mean / ic_std, ric_mean, ric_mean / ric_std 

@@ -1,3 +1,21 @@
+"""
+# 因子池更新模块 (Pool Update Module)
+#
+# 本文件定义了因子池更新的数据结构和类，用于跟踪和管理因子池的变化。主要内容包括：
+#
+# 1. PoolUpdate：因子池更新的基类
+#    - 定义了跟踪因子池变化的接口
+#    - 提供新旧池性能对比方法
+#
+# 2. 具体更新类型：
+#    - SetPool：整体设置新因子池
+#    - AddRemoveAlphas：添加或移除特定因子
+#
+# 与其他组件的关系：
+# - 被alphagen/models/linear_alpha_pool.py使用，记录因子池的变更历史
+# - 使用alphagen/data/expression.py中的表达式表示因子
+# - 为强化学习训练过程提供因子池变化的跟踪和记录
+"""
 from abc import ABCMeta, abstractmethod
 from typing import List, Optional, cast
 from dataclasses import dataclass, MISSING

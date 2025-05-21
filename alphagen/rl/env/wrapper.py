@@ -1,3 +1,24 @@
+"""
+# 强化学习环境包装器模块 (RL Environment Wrapper Module)
+#
+# 本文件实现了强化学习环境的包装器，为核心环境提供标准化接口。主要内容包括：
+#
+# 1. AlphaEnvWrapper：环境包装器类
+#    - 将符号表达式令牌转换为离散动作
+#    - 管理离散观察空间
+#    - 提供动作掩码功能，限制非法操作
+#    - 处理子表达式的集成
+#
+# 2. AlphaEnv：便捷函数，创建完整的环境
+#    - 简化环境创建过程
+#    - 组合核心环境和包装器
+#
+# 与其他组件的关系：
+# - 包装alphagen/rl/env/core.py中的核心环境
+# - 使用alphagen/config.py中的配置常量
+# - 为alphagen/rl/policy.py提供标准化的训练接口
+# - 支持stable-baselines3等标准RL库的使用
+"""
 from typing import Tuple, List, Optional
 import gymnasium as gym
 import numpy as np

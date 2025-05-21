@@ -1,3 +1,24 @@
+"""
+# 遗传规划因子生成模块 (Genetic Programming Factor Generation)
+#
+# 本文件实现了使用遗传规划（GP）方法生成量化因子。主要内容包括：
+#
+# 1. 配置和初始化gplearn遗传规划器
+#    - 定义适应度函数和操作符
+#    - 设置训练参数
+#    - 评估生成的因子
+#
+# 2. 因子池操作：
+#    - 尝试单个因子评估
+#    - 构建多因子组合
+#    - 处理因子间相关性
+#
+# 与其他组件的关系：
+# - 使用alphagen/models中的因子池存储生成的因子
+# - 使用alphagen/data中的表达式表示因子
+# - 使用gplearn库实现遗传规划算法
+# - 作为PPO强化学习算法的替代方案，提供对比实验
+"""
 import json
 import os
 from collections import Counter
@@ -10,8 +31,8 @@ from alphagen.models.linear_alpha_pool import MseAlphaPool
 from alphagen.utils.random import reseed_everything
 from alphagen_generic.operators import funcs as generic_funcs
 from alphagen_generic.features import *
-from alphagen_qlib.calculator import QLibStockDataCalculator
-from alphagen_qlib.stock_data import initialize_qlib
+from alphagen_qlib.qlib_alpha_calculator import QLibGoldDataCalculator
+from alphagen_qlib.gold_data import initialize_qlib
 from gplearn.fitness import make_fitness
 from gplearn.functions import make_function
 from gplearn.genetic import SymbolicRegressor
@@ -19,17 +40,17 @@ from gplearn.genetic import SymbolicRegressor
 
 funcs = [make_function(**func._asdict()) for func in generic_funcs]
 
-instruments = 'csi300'
+# Gold market specific setup
 seed = 2
 reseed_everything(seed)
 
 cache = {}
 device = torch.device("cuda:0")
-initialize_qlib("~/.qlib/qlib_data/cn_data_2024h1")
-data_train = StockData(instruments, "2012-01-01", "2021-12-31", device=device)
-data_test = StockData(instruments, "2022-01-01", "2023-06-30", device=device)
-calculator_train = QLibStockDataCalculator(data_train, target)
-calculator_test = QLibStockDataCalculator(data_test, target)
+initialize_qlib("~/.qlib/qlib_data/gold_data_2024")
+data_train = GoldData("2012-01-01", "2021-12-31", device=device)
+data_test = GoldData("2022-01-01", "2023-06-30", device=device)
+calculator_train = QLibGoldDataCalculator(data_train, target)
+calculator_test = QLibGoldDataCalculator(data_test, target)
 
 pool = MseAlphaPool(
     capacity=20,
@@ -122,7 +143,8 @@ def ev():
 
 
 if __name__ == '__main__':
-    features = ['open_', 'close', 'high', 'low', 'volume', 'vwap']
+    # Updated for gold market features - replaced vwap with oi (open interest)
+    features = ['open_', 'close', 'high', 'low', 'volume', 'oi']
     constants = [f'Constant({v})' for v in [-30., -10., -5., -2., -1., -0.5, -0.01, 0.01, 0.5, 1., 2., 5., 10., 30.]]
     terminals = features + constants
 
@@ -150,4 +172,4 @@ if __name__ == '__main__':
         n_jobs=1
     )
     est_gp.fit(X_train, y_train, callback=ev)
-    print(est_gp._program.execute(X_train))
+    print(est_gp._program.execute(X_train)) 

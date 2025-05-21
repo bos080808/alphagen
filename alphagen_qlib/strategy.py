@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from qlib.contrib.strategy.signal_strategy import BaseSignalStrategy
 from qlib.backtest.decision import Order, OrderDir, TradeDecisionWO
-from alphagen.trade.base import StockCode, StockPosition, StockSignal, StockStatus
+from alphagen.trade.base import AssetCode, Position, TradeSignal, TradeStatus
 
 from alphagen.trade.strategy import Strategy
 
@@ -27,7 +27,7 @@ class TopKSwapNStrategy(BaseSignalStrategy, Strategy):
     def step_decision(self,
                       status_df: pd.DataFrame,
                       position_df: Optional[pd.DataFrame] = None
-                     ) -> Tuple[List[StockCode], List[StockCode]]:
+                     ) -> Tuple[List[AssetCode], List[AssetCode]]:
         signal = dict(zip(status_df['code'], status_df['signal']))
         unbuyable = set(record['code'] for record in status_df.to_dict('records') if not record['buyable'])
         unsellable = set(record['code'] for record in status_df.to_dict('records') if not record['sellable'])
@@ -83,7 +83,7 @@ class TopKSwapNStrategy(BaseSignalStrategy, Strategy):
         if pred_score is None:
             return TradeDecisionWO([], self)
 
-        stock_signal: StockSignal = pred_score.to_dict()
+        stock_signal: TradeSignal = pred_score.to_dict()
 
         def get_holding(stock_id: str):
             amount = None # Not required yet

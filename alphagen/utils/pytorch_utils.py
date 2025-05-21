@@ -1,3 +1,21 @@
+"""
+# PyTorch工具模块 (PyTorch Utilities Module)
+#
+# 本文件提供了PyTorch相关的工具函数，用于处理张量数据。主要内容包括：
+#
+# 1. masked_mean_std：计算带掩码的均值和标准差
+#    - 处理NaN值和缺失数据
+#    - 支持批量计算
+#
+# 2. normalize_by_day：按日期标准化数据
+#    - 实现金融数据的每日截面标准化
+#    - 处理异常值
+#
+# 与其他组件的关系：
+# - 被alphagen/utils/correlation.py使用，支持相关性计算
+# - 为alphagen/data中的数据处理提供基础工具
+# - 支持alphagen/models中的因子计算和处理
+"""
 from typing import Tuple, Optional
 import torch
 from torch import Tensor

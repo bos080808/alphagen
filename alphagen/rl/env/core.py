@@ -1,3 +1,23 @@
+"""
+# 强化学习环境核心模块 (RL Environment Core Module)
+#
+# 本文件实现了强化学习环境的核心功能，使用符号表达式生成因子。主要内容包括：
+#
+# 1. AlphaEnvCore：因子生成环境的核心类
+#    - 基于Gym环境接口
+#    - 管理表达式构建过程
+#    - 评估生成的因子表达式
+#    - 验证操作的合法性
+#
+# 环境状态是当前构建的表达式序列，动作是添加新的表达式元素（运算符、特征等），
+# 奖励是因子的有效性和评估指标。
+#
+# 与其他组件的关系：
+# - 使用alphagen/data目录下的表达式和构建器模块
+# - 被alphagen/rl/env/wrapper.py包装，提供标准化的接口
+# - 与alphagen/models中的因子池交互，评估生成的因子
+# - 为alphagen/rl/policy.py提供训练环境
+"""
 from typing import Tuple, Optional
 import gymnasium as gym
 import math

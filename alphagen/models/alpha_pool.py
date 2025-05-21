@@ -1,8 +1,23 @@
+"""
+# 因子池基类模块 (Alpha Pool Base Module)
+#
+# 本文件定义了因子池的基类接口，用于管理和评估生成的量化投资因子。
+# AlphaPoolBase类提供了因子池的核心功能：
+#
+# 1. 管理因子容量和状态
+# 2. 尝试添加新因子并评估其性能
+# 3. 测试因子组合的效果
+#
+# 与其他组件的关系：
+# - 被alphagen/models/linear_alpha_pool.py继承并实现具体功能
+# - 使用alphagen/data/calculator.py中的计算器评估因子
+# - 存储由alphagen/rl/policy.py通过强化学习生成的因子表达式
+"""
 from typing import Tuple, Dict, Any, Callable
 from abc import ABCMeta, abstractmethod
 
 import torch
-from ..data.calculator import AlphaCalculator
+from ..data.alpha_calculator_base import AlphaCalculator
 from ..data.expression import Expression
 
 

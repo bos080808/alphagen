@@ -1,0 +1,39 @@
+# Gold Factor Generation Configuration
+
+# Feature configuration
+features_config:
+  price_features:
+    - close
+    - volume
+  technical_features:
+    - ma
+
+# Environment configuration
+env_config:
+  window_size: 5
+  max_steps: 10
+  min_periods: 2
+  action_scale: 0.5
+  state_scale: 0.1
+  use_positions: true
+
+# Reward configuration
+reward_weights:
+  ic: 1.0
+
+# Policy configuration
+policy_config:
+  learning_rate: 3e-4
+  n_steps: 32
+  batch_size: 16
+  n_epochs: 2
+  gamma: 0.99
+  clip_range: 0.1
+  ent_coef: 0.01
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  target_kl: 0.01
+
+# Training configuration
+training:
+  total_timesteps: 100 

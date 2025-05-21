@@ -4,19 +4,19 @@ from typing import List, Tuple
 from alphagen.data.expression import *
 from alphagen_generic.features import *
 
-from alphagen_qlib.stock_data import StockData
+from alphagen_qlib.gold_data import GoldData
 from alphagen.data.parser import ExpressionParser
 
 
 def load_recent_data(instrument: str,
                      window_size: int = 365,
                      offset: int = 1,
-                     **kwargs) -> Tuple[StockData, str]:
+                     **kwargs) -> Tuple[GoldData, str]:
     today = datetime.date.today()
     start_date = str(today - datetime.timedelta(days=window_size))
     end_date = str(today - datetime.timedelta(days=offset))
 
-    return StockData(instrument=instrument,
+    return GoldData(instrument=instrument,
                      start_time=start_date,
                      end_time=end_date,
                      max_future_days=0,

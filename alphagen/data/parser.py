@@ -1,3 +1,21 @@
+"""
+# 表达式解析器模块 (Expression Parser Module)
+#
+# 本文件实现了表达式的解析器，用于将字符串形式的表达式转换为表达式树。主要内容包括：
+#
+# 1. ExpressionParser：表达式解析器类
+#    - 支持解析数学运算、时序函数和逻辑操作等
+#    - 处理特殊符号和语法规则
+#    - 构建嵌套的表达式树结构
+#
+# 2. parse_expression：便捷函数，使用默认配置解析表达式
+#
+# 与其他组件的关系：
+# - 使用alphagen/data/expression.py中定义的表达式类型
+# - 被alphagen/models中的因子池使用，解析因子表达式字符串
+# - 为alphagen/rl中的强化学习模型提供表达式解析支持
+# - 与alphagen/data/tree.py配合，管理表达式的树状结构
+"""
 import re
 from typing import Type, List, Dict, Set, Union, Optional, cast, overload, Literal
 from .expression import *
