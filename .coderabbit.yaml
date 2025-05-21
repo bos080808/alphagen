@@ -1,0 +1,26 @@
+# CodeRabbit配置文件
+version: 1
+
+# 通用配置
+general:
+  ignore_patterns:
+    - "**/__pycache__/**"
+    - "**/.git/**"
+    - "**/out/**"
+
+# Python分析配置
+python:
+  dependencies:
+    requirements_file: "requirements.txt"
+  linting:
+    # 忽略的问题类型
+    ignore_patterns:
+      - "Import*"  # 忽略导入错误
+      - "Module*"  # 忽略模块错误
+  analysis:
+    # 扩展路径以包含自定义模块
+    extra_paths:
+      - alphagen
+      - alphagen_qlib
+      - alphagen_llm
+      - alphagen_generic 
