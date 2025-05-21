@@ -1,17 +1,17 @@
-# AlphaGen - 量化投资因子生成框架
+# AlphaGen - 黄金量化投资因子生成框架
 
-AlphaGen是一个用于量化投资因子生成的综合框架，支持多种因子生成方法，包括强化学习（PPO）、遗传规划（GP）和基于大语言模型（LLM）的方法。该框架专注于发现和评估可用于金融市场交易的有效量化因子。
+AlphaGen是一个专为黄金市场设计的量化投资因子生成框架，支持多种因子生成方法，包括强化学习（PPO）、遗传规划（GP）和基于大语言模型（LLM）的方法。该框架专注于发现和评估可用于黄金交易的有效量化因子，帮助投资者在贵金属市场获取超额收益。
 
 ## 中文介绍
 
-AlphaGen框架提供了一套完整的工具，用于量化投资因子的生成、评估和应用。框架的主要特点包括：
+AlphaGen框架提供了一套针对黄金市场的完整工具，用于量化投资因子的生成、评估和应用。框架的主要特点包括：
 
-### 1. 多种因子生成方法
-- 基于PPO的强化学习方法
-- 遗传规划（GP）方法
-- 大语言模型（LLM）辅助生成
+### 1. 黄金市场专属因子生成方法
+- 基于PPO的强化学习方法，适配黄金价格波动特性
+- 遗传规划（GP）方法，挖掘黄金与宏观经济的关系
+- 大语言模型（LLM）辅助生成，结合专家知识和市场规律
 
-### 2. 完整的因子评估体系
+### 2. 完整的黄金因子评估体系
 - 信息系数（IC）
 - 排序信息系数（Rank IC）
 - 信息比率（IR）
@@ -21,10 +21,11 @@ AlphaGen框架提供了一套完整的工具，用于量化投资因子的生成
 - 盈亏比
 - NDCG (归一化折扣累积增益)
 
-### 3. 灵活的数据处理
-- 支持多种数据源
-- 可定制的特征工程
+### 3. 黄金市场数据处理
+- 支持多种黄金市场数据源
+- 黄金价格与宏观经济指标的特征工程
 - 高效的数据计算和缓存机制
+- 整合黄金、美元指数、利率等关键影响因素
 
 ### 4. 性能优化
 - 并行处理框架
@@ -35,10 +36,10 @@ AlphaGen框架提供了一套完整的工具，用于量化投资因子的生成
 
 ## Features (English)
 
-### 1. Multiple Factor Generation Methods
-- PPO-based Reinforcement Learning
-- Genetic Programming (GP)
-- LLM-assisted factor generation
+### 1. Gold Market-Specific Factor Generation
+- PPO-based Reinforcement Learning optimized for gold price fluctuations
+- Genetic Programming (GP) for discovering relationships between gold and macro indicators
+- LLM-assisted generation incorporating expert knowledge and market patterns
 
 ### 2. Comprehensive Factor Evaluation
 - Information Coefficient (IC)
@@ -147,16 +148,16 @@ alphagen/
 
 ## Usage Examples
 
-### 1. 使用强化学习生成因子
+### 1. 使用强化学习生成黄金因子
 
 ```python
 from alphagen.rl.env.factor_env import FactorEnv
 from alphagen.rl.policy import Policy
 import alphagen.scripts.rl as rl
 
-# 初始化环境
+# 初始化黄金市场环境
 env = FactorEnv(
-    data_calculator=calculator,  
+    data_calculator=gold_calculator,  
     max_depth=3
 )
 
@@ -174,11 +175,11 @@ rl.train(
     learning_rate=1e-4
 )
 
-# 获取生成的因子
-factors = policy.generate_factors(env)
+# 获取生成的黄金因子
+gold_factors = policy.generate_factors(env)
 ```
 
-### 2. 使用LLM生成因子
+### 2. 使用LLM生成黄金因子
 
 ```python
 from alphagen_llm.client import OpenAIClient
@@ -187,30 +188,31 @@ from alphagen_llm.generator import LLMFactorGenerator
 # 初始化LLM客户端
 client = OpenAIClient(api_key="your_api_key")
 
-# 初始化因子生成器
+# 初始化黄金因子生成器
 generator = LLMFactorGenerator(
     client=client,
-    data_calculator=calculator
+    data_calculator=gold_calculator
 )
 
-# 生成因子
-factors = generator.generate_factors(
+# 生成黄金因子
+gold_factors = generator.generate_factors(
     num_factors=10,
-    market_context="黄金市场在过去一周出现大幅波动"
+    market_context="黄金市场在过去一周受美联储加息影响出现大幅波动"
 )
 ```
 
-### 3. 因子评估与回测
+### 3. 黄金因子评估与回测
 
 ```python
 from backtest import Backtest, BacktestConfig
 
-# 配置回测
+# 配置黄金回测
 config = BacktestConfig(
     start_time="2020-01-01",
     end_time="2023-12-31",
-    alpha_path="factors/alphas.json",
-    initial_capital=1000000.0
+    alpha_path="factors/gold_alphas.json",
+    initial_capital=1000000.0,
+    trading_fee=0.0005  # 黄金交易费率
 )
 
 # 运行回测
@@ -218,6 +220,16 @@ backtest = Backtest(config)
 results = backtest.run()
 report = backtest.generate_report(results)
 ```
+
+## 黄金市场特性
+
+AlphaGen框架特别考虑了黄金市场的独特特性：
+
+1. **宏观经济敏感性** - 黄金价格对利率、通胀和地缘政治事件高度敏感
+2. **避险特性** - 市场恐慌情绪下的价格行为模式
+3. **季节性模式** - 传统节日和季节性需求对价格的影响
+4. **美元相关性** - 黄金与美元指数的负相关关系
+5. **供需平衡** - 黄金生产和消费数据对价格的长期影响
 
 ## Contributing
 
@@ -230,7 +242,8 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Acknowledgments
 
 - FRED API for economic data
-- Yahoo Finance for market data
+- Yahoo Finance for gold market data
+- World Gold Council for industry insights
 - Hugging Face for transformer models
 - The Qlib team for inspiration and some code structure
 
